@@ -1,0 +1,16 @@
+{
+    "name": "ytmusic-stats",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "setup": "npm --prefix server install && npm --prefix YTMusicApp install",
+        "dev": "concurrently -n server,client -c magenta,cyan \"npm --prefix server run dev\" \"npm --prefix YTMusicApp start\"",
+        "server": "npm --prefix server run dev",
+        "client": "npm --prefix YTMusicApp start",
+        "build": "npm --prefix YTMusicApp run build",
+        "start": "npm --prefix server start"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.2"
+    }
+}

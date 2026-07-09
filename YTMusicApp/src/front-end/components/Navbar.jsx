@@ -1,83 +1,129 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import MenuIcon from '@mui/icons-material/Menu';
-import Typography from '@mui/material/Typography';
+import {
+    Box,
+    Button,
+    IconButton,
+    ListItemIcon,
+    Menu,
+    MenuItem,
+    Typography,
+} from "@mui/material";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import EmojiEventsRoundedIcon from "@mui/icons-material/EmojiEventsRounded";
+import FileUploadRoundedIcon from "@mui/icons-material/FileUploadRounded";
+import HeadphonesRoundedIcon from "@mui/icons-material/HeadphonesRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import MenuIcon from "@mui/icons-material/Menu";
+import SpaceDashboardRoundedIcon from "@mui/icons-material/SpaceDashboardRounded";
+import { Link, useLocation } from "react-router-dom";
 
-import { Link } from "react-router-dom";
+import { BRAND_GRADIENT } from "../../theme";
+import SearchBox from "./SearchBox";
 
-const pages = ['Home','Charts', 'Stats'];
+const PAGES = [
+    { label: "Dashboard", to: "/", icon: SpaceDashboardRoundedIcon },
+    { label: "Top", to: "/top", icon: EmojiEventsRoundedIcon },
+    { label: "Trends", to: "/trends", icon: BarChartRoundedIcon },
+    { label: "History", to: "/history", icon: HistoryRoundedIcon },
+    { label: "Import", to: "/import", icon: FileUploadRoundedIcon },
+];
+
+function isActive(pathname, to) {
+    return to === "/" ? pathname === "/" : pathname.startsWith(to);
+}
 
 const Navbar = () => {
-  const [anchorEl, setAnchorEl] = useState(null);
+    const [anchorEl, setAnchorEl] = useState(null);
+    const { pathname } = useLocation();
 
-  return (
-    <Box>
-        <Box sx = {{
-            display: {sm: 'flex', xs: 'none'}, 
-            gap: 1, 
-            p: 2,
-            flexDirection: 'row',
-            alignItems: 'center',
-            background: 'linear-gradient(120deg, #3961bb, #9a3dbc)'
-        }}>
-            {pages.map((page) => (
-            <Button
-                variant="text"
-                component = {Link}
-                to = {page === 'Home' ? '/' : `/${page}`}
-                key = {page}
-                sx = {{color: 'white'}}
-            >
-                {page}
-            </Button>
-            ))}
+    const brand = (
+        <Box
+            component={Link}
+            to="/"
+            sx={{ display: "flex", alignItems: "center", gap: 1, textDecoration: "none", color: "#fff" }}
+        >
+            <HeadphonesRoundedIcon />
+            <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.3 }}>
+                YT Music Stats
+            </Typography>
         </Box>
+    );
 
-        <Box 
-            sx = {{display: {sm: 'none', xs: 'flex'}, 
-            p: 2,
-            background: 'linear-gradient(120deg, #3961bb, #9a3dbc)'
-        }}>
-            <IconButton onClick = {(event) => {setAnchorEl(event.currentTarget)}}>
-                <MenuIcon/>
-            </IconButton>
-
-            <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={() => {setAnchorEl(null)}}
-                sx = {{".MuiMenu-list": { py: 0 }}}
+    return (
+        <Box>
+            {/* Desktop */}
+            <Box
+                sx={{
+                    display: { sm: "flex", xs: "none" },
+                    gap: 1,
+                    px: 3,
+                    py: 1.5,
+                    alignItems: "center",
+                    background: BRAND_GRADIENT,
+                }}
             >
+                {brand}
+                <Box sx={{ display: "flex", gap: 0.5, ml: 3, flex: 1 }}>
+                    {PAGES.map(({ label, to }) => (
+                        <Button
+                            key={to}
+                            component={Link}
+                            to={to}
+                            sx={{
+                                color: "#fff",
+                                textTransform: "none",
+                                fontWeight: isActive(pathname, to) ? 700 : 400,
+                                borderRadius: 2,
+                                px: 1.5,
+                                borderBottom: "2px solid",
+                                borderColor: isActive(pathname, to) ? "#fff" : "transparent",
+                                "&:hover": { bgcolor: "rgba(255,255,255,0.12)" },
+                            }}
+                        >
+                            {label}
+                        </Button>
+                    ))}
+                </Box>
+                <Box sx={{ display: { md: "block", xs: "none" } }}>
+                    <SearchBox compact />
+                </Box>
+            </Box>
 
-                {pages.map((page, idx) => (
-                    <Link 
-                        style = {{textDecoration: "none", color: "white"}} 
-                        to = {page === 'Home' ? '/' : `/${page}`} 
-                        key={page}
-                    >
-                        <Box 
-                            sx = {{
-                                pb: idx === pages.length - 1 ? 1 : 0,
-                                pt: idx === 0 ? 1 : 0
-                            }} 
+            {/* Mobile */}
+            <Box
+                sx={{
+                    display: { sm: "none", xs: "flex" },
+                    alignItems: "center",
+                    gap: 1,
+                    px: 2,
+                    py: 1.5,
+                    background: BRAND_GRADIENT,
+                }}
+            >
+                <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} sx={{ color: "#fff" }}>
+                    <MenuIcon />
+                </IconButton>
+                {brand}
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+                    {PAGES.map(({ label, to, icon: Icon }) => (
+                        <MenuItem
+                            key={to}
+                            component={Link}
+                            to={to}
+                            selected={isActive(pathname, to)}
                             onClick={() => setAnchorEl(null)}
                         >
-                            <MenuItem>
-                                <Typography variant = "body2">
-                                    {page}
-                                </Typography>
-                            </MenuItem>
-                        </Box>
-                    </Link>
-                ))}
-            </Menu>
+                            <ListItemIcon>
+                                <Icon fontSize="small" />
+                            </ListItemIcon>
+                            <Typography variant="body2">{label}</Typography>
+                        </MenuItem>
+                    ))}
+                </Menu>
+            </Box>
         </Box>
-    </Box>
-  );
+    );
 };
+
 export default Navbar;

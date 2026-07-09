@@ -1,0 +1,19 @@
+# OS noise
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output
+YTMusicApp/build/
+
+# Server secrets & runtime data
+server/.env
+server/data/*
+!server/data/.gitkeep
+
+# Personal listening data (stays on disk as the default dataset)
+watch-history.json
+listening_data.csv
+Takeout/
+*.zip
