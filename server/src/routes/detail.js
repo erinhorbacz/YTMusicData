@@ -3,6 +3,7 @@ import { Router } from "express";
 import * as agg from "../aggregate.js";
 import { ApiError, asyncHandler } from "../errors.js";
 import { parseRange } from "../rangeParams.js";
+import { sidOf } from "../session.js";
 import * as store from "../store.js";
 
 const router = Router();
@@ -11,7 +12,7 @@ router.get(
     "/artist/:artistKey",
     asyncHandler(async (req, res) => {
         const { fromMs, toMs, tz } = parseRange(req.query);
-        const state = store.getState();
+        const state = store.getState(sidOf(req));
         const rangePlays = agg.filterByRange(state.plays, fromMs, toMs);
         const detail = agg.computeArtistDetail(rangePlays, state.catalog, req.params.artistKey, tz);
         if (!detail) {
@@ -25,7 +26,7 @@ router.get(
     "/album/:albumKey",
     asyncHandler(async (req, res) => {
         const { fromMs, toMs, tz } = parseRange(req.query);
-        const state = store.getState();
+        const state = store.getState(sidOf(req));
         const rangePlays = agg.filterByRange(state.plays, fromMs, toMs);
         const detail = agg.computeAlbumDetail(rangePlays, state.catalog, req.params.albumKey, tz);
         if (!detail) {
@@ -43,7 +44,7 @@ router.get(
     "/song/:videoId",
     asyncHandler(async (req, res) => {
         const { fromMs, toMs, tz } = parseRange(req.query);
-        const state = store.getState();
+        const state = store.getState(sidOf(req));
         const rangePlays = agg.filterByRange(state.plays, fromMs, toMs);
         const detail = agg.computeSongDetail(rangePlays, state.catalog, req.params.videoId, tz);
         if (!detail) {

@@ -4,14 +4,16 @@ import * as agg from "../aggregate.js";
 import * as job from "../enrichment/job.js";
 import { ApiError, asyncHandler } from "../errors.js";
 import { parsePaging, parseRange } from "../rangeParams.js";
+import { sidOf } from "../session.js";
 import * as store from "../store.js";
 
 const router = Router();
 
-// Resolve the shared from/to/tz params and pre-filter plays once per request.
+// Resolve the caller's dataset (their session upload, else the site
+// default), the shared from/to/tz params, and pre-filter plays once.
 function withRange(req) {
     const { fromMs, toMs, tz } = parseRange(req.query);
-    const state = store.getState();
+    const state = store.getState(sidOf(req));
     return {
         state,
         tz,
@@ -26,9 +28,10 @@ router.get("/health", (req, res) => {
 });
 
 router.get("/status", (req, res) => {
+    const state = store.getState(sidOf(req));
     res.json({
-        dataset: store.getState().dataset,
-        enrichment: job.getStatus(),
+        dataset: state.dataset,
+        enrichment: job.getStatus(state),
     });
 });
 
@@ -101,7 +104,7 @@ router.get(
             throw new ApiError(400, "BAD_CURSOR", "`before` must be a cursor from nextCursor.");
         }
         const { limit } = parsePaging(req.query, { defaultLimit: 50, maxLimit: 200 });
-        res.json(agg.computeRecent(store.getState().plays, { beforeIdx, limit }));
+        res.json(agg.computeRecent(store.getState(sidOf(req)).plays, { beforeIdx, limit }));
     }),
 );
 
@@ -112,7 +115,7 @@ router.get(
         if (q.length < 2) {
             throw new ApiError(400, "QUERY_TOO_SHORT", "Search needs at least 2 characters.");
         }
-        res.json(agg.searchCatalog(store.getState().catalog, q));
+        res.json(agg.searchCatalog(store.getState(sidOf(req)).catalog, q));
     }),
 );
 

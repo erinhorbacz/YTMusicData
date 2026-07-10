@@ -1,0 +1,23 @@
+# Render blueprint: deploys the Express API (the React frontend is served
+# separately by GitHub Pages). Connect this repo at
+# https://dashboard.render.com → New → Blueprint.
+services:
+  - type: web
+    name: ytmusic-stats-api
+    runtime: node
+    plan: free
+    buildCommand: npm --prefix server install
+    startCommand: npm --prefix server start
+    healthCheckPath: /api/health
+    envVars:
+      # Free instances have ephemeral disks and sleep when idle — don't let
+      # every wake-up re-scrape; the committed cache seed covers the library.
+      - key: ENRICH_ON_BOOT
+        value: "false"
+      # Set in the Render dashboard: protects "replace the site default
+      # dataset" and enrichment controls. Pick any long random string.
+      - key: ADMIN_TOKEN
+        sync: false
+      # Optional: only needed if you run enrichment on this host.
+      - key: YOUTUBE_API_KEY
+        sync: false

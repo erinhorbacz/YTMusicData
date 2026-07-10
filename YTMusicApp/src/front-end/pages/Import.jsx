@@ -12,6 +12,7 @@ import {
     DialogTitle,
     LinearProgress,
     Stack,
+    TextField,
     Typography,
 } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
@@ -20,10 +21,17 @@ import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 
-import client from "../../api/client";
+import client, { getAdminToken, setAdminToken } from "../../api/client";
 import { useDataset } from "../../context/DatasetContext";
 import { formatDate, formatNumber } from "../../utils/format";
 import SectionCard from "../components/SectionCard";
+
+// Attach the site-owner token when one is stored (unlocks admin actions on
+// the deployed API; harmless locally where no ADMIN_TOKEN is configured).
+function adminHeaders() {
+    const token = getAdminToken();
+    return token ? { "X-Admin-Token": token } : {};
+}
 
 const ENRICHMENT_LABELS = {
     idle: "Not started",
@@ -56,17 +64,18 @@ function DatasetCard() {
     };
 
     if (!dataset) return null;
+    const isSession = dataset.source === "session";
     return (
         <SectionCard
             title="Current dataset"
             action={
-                dataset.source === "upload" && (
+                isSession && (
                     <Button
                         size="small"
                         startIcon={<RestartAltRoundedIcon />}
                         onClick={() => setConfirmOpen(true)}
                     >
-                        Reset to default
+                        Reset to site default
                     </Button>
                 )
             }
@@ -74,8 +83,8 @@ function DatasetCard() {
             <Stack spacing={1}>
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                     <Chip
-                        label={dataset.source === "upload" ? "Uploaded file" : "Default dataset"}
-                        color={dataset.source === "upload" ? "secondary" : "primary"}
+                        label={isSession ? "Your uploaded data (this browser only)" : "Site default dataset"}
+                        color={isSession ? "secondary" : "primary"}
                         variant="outlined"
                         size="small"
                     />
@@ -93,11 +102,11 @@ function DatasetCard() {
             </Stack>
 
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-                <DialogTitle>Reset to the default dataset?</DialogTitle>
+                <DialogTitle>Reset to the site default?</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        The uploaded watch-history will be replaced by the default dataset. Enrichment
-                        data is kept — it's shared across datasets.
+                        Your uploaded watch-history will be dropped and you'll see the site's default
+                        dataset again. Enrichment data is kept — it's shared across datasets.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
@@ -118,6 +127,7 @@ function UploadCard() {
     const [phase, setPhase] = useState("idle"); // idle | uploading | processing | success | error
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState(null);
+    const [adminToken, setAdminTokenState] = useState(getAdminToken());
 
     const uploadFile = async (file) => {
         if (!file) return;
@@ -128,6 +138,7 @@ function UploadCard() {
         form.append("file", file);
         try {
             const res = await client.post("/import", form, {
+                headers: adminHeaders(),
                 onUploadProgress: (event) => {
                     const pct = event.total ? Math.round((event.loaded / event.total) * 100) : 0;
                     setProgress(pct);
@@ -137,7 +148,10 @@ function UploadCard() {
             applyStatus(res.data);
             setPhase("success");
             setMessage(
-                `Imported ${formatNumber(res.data.dataset.musicPlays)} music plays from ${res.data.dataset.fileName}.`,
+                `Imported ${formatNumber(res.data.dataset.musicPlays)} music plays from ${res.data.dataset.fileName}` +
+                    (res.data.dataset.source === "default"
+                        ? " — set as the site default everyone sees."
+                        : " — visible only in this browser."),
             );
         } catch (err) {
             setPhase("error");
@@ -155,7 +169,8 @@ function UploadCard() {
                     <Box component="span" sx={{ color: "primary.light" }}>
                         Google Takeout → YouTube and YouTube Music → history → watch-history.json
                     </Box>
-                    . Uploading replaces the active dataset (the file never leaves this machine).
+                    . Your upload is private to this browser — it never replaces what other visitors
+                    see (unless you're the site owner and enter the admin token below).
                 </Typography>
 
                 <Box
@@ -215,6 +230,19 @@ function UploadCard() {
                 )}
                 {phase === "success" && <Alert severity="success">{message}</Alert>}
                 {phase === "error" && <Alert severity="error">{message}</Alert>}
+
+                <TextField
+                    label="Site admin token (owner only)"
+                    type="password"
+                    size="small"
+                    value={adminToken}
+                    onChange={(e) => {
+                        setAdminTokenState(e.target.value);
+                        setAdminToken(e.target.value.trim());
+                    }}
+                    helperText="With a valid token, your upload replaces the site's default dataset and enrichment controls unlock."
+                    sx={{ maxWidth: 420 }}
+                />
             </Stack>
         </SectionCard>
     );
@@ -227,7 +255,7 @@ function EnrichmentCard() {
     const act = async (action) => {
         setError(null);
         try {
-            await client.post(`/enrichment/${action}`);
+            await client.post(`/enrichment/${action}`, null, { headers: adminHeaders() });
             refreshStatus();
         } catch (err) {
             if (err.code !== "ALREADY_RUNNING") setError(err.message);

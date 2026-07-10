@@ -61,12 +61,32 @@ resumable — pause it, restart the server, it picks up where it left off.
 cp server/.env.example server/.env   # then optionally add YOUTUBE_API_KEY
 ```
 
-## Production mode
+## Production mode (single machine)
 
 ```bash
 npm run build   # builds the React app
 npm start       # Express serves the API and the built app on :5001
 ```
+
+## Web deployment (GitHub Pages + Render)
+
+The public deployment splits the app: **GitHub Pages** serves the static
+frontend (rebuilt by `.github/workflows/deploy-pages.yml` on every push) and
+**Render** runs the Express API (defined in `render.yaml`, auto-deploys on
+push). The frontend finds the API through the repo's `API_URL` Actions
+variable, and the server's CORS layer allows the Pages origin.
+
+The deployed API is **multi-tenant**: visitors see the committed
+`watch-history.json` as the site default, and anyone can upload their own
+Takeout file — uploads are scoped to a per-browser session id (the
+`X-Dataset-Id` header), held in memory with TTL/LRU eviction, and never
+affect other visitors. The committed `server/data-seed/enrichment.json`
+snapshot seeds durations/albums on Render's ephemeral disk; session uploads
+reuse that shared cache but never drive the scraper.
+
+Owner-only actions (replacing the site default dataset, running enrichment)
+require the `ADMIN_TOKEN` set in Render's dashboard — enter the same token
+in the app's Import page to unlock them.
 
 ## Notes
 

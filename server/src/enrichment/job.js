@@ -29,9 +29,10 @@ let running = false;
 let pauseRequested = false;
 let datasetChanged = false;
 
-// Fraction of plays whose song has a real cached duration.
-function computeCoverage() {
-    const { plays, catalog } = store.getState();
+// Fraction of plays whose song has a real cached duration — computed for the
+// caller's dataset (session or default) against the shared cache.
+function computeCoverage(state = store.getDefaultState()) {
+    const { plays, catalog } = state;
     if (plays.length === 0) return 0;
     let covered = 0;
     for (const song of catalog.songs.values()) {
@@ -40,7 +41,7 @@ function computeCoverage() {
     return Math.round((covered / plays.length) * 1000) / 1000;
 }
 
-export function getStatus() {
+export function getStatus(state = store.getDefaultState()) {
     const cacheStats = cache.stats();
     return {
         state: status.state,
@@ -51,7 +52,7 @@ export function getStatus() {
         withDuration: cacheStats.withDuration,
         withAlbum: cacheStats.withAlbum,
         failed: cacheStats.failures,
-        coverage: computeCoverage(),
+        coverage: computeCoverage(state),
         startedAt: status.startedAt,
         lastError: status.lastError,
     };
@@ -59,8 +60,10 @@ export function getStatus() {
 
 // Every videoId lacking a duration, ordered by song play count so the top of
 // the charts gets real numbers first.
+// The scraper only works the SITE DEFAULT dataset — session uploads read the
+// shared cache but never enqueue lookups (abuse control on the public host).
 function uncachedDurationIds() {
-    const { catalog } = store.getState();
+    const { catalog } = store.getDefaultState();
     const songs = [...catalog.songs.values()].sort((a, b) => b.playCount - a.playCount);
     const ids = [];
     const seen = new Set();
@@ -77,7 +80,7 @@ function uncachedDurationIds() {
 }
 
 function songsNeedingAlbum() {
-    const { catalog } = store.getState();
+    const { catalog } = store.getDefaultState();
     return [...catalog.songs.values()]
         .filter(
             (song) =>

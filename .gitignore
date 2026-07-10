@@ -12,8 +12,8 @@ server/.env
 server/data/*
 !server/data/.gitkeep
 
-# Personal listening data (stays on disk as the default dataset)
-watch-history.json
+# Personal listening data. NOTE: the root watch-history.json is deliberately
+# COMMITTED — it's the public site's default dataset (owner's choice).
 listening_data.csv
 Takeout/
 *.zip

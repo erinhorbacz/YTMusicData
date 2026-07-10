@@ -10,6 +10,9 @@ export const DATA_DIR = path.join(SERVER_ROOT, "data");
 export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 export const CACHE_DIR = path.join(DATA_DIR, "cache");
 export const CACHE_FILE = path.join(CACHE_DIR, "enrichment.json");
+// Committed snapshot of the enrichment cache — free hosts have ephemeral
+// disks, so the runtime cache seeds from this on a fresh instance.
+export const CACHE_SEED_FILE = path.join(SERVER_ROOT, "data-seed", "enrichment.json");
 export const ACTIVE_FILE = path.join(DATA_DIR, "active.json");
 
 export const DEFAULT_DATASET = path.join(REPO_ROOT, "watch-history.json");
@@ -26,3 +29,6 @@ export const getYoutubeApiKey = () =>
     (process.env.YOUTUBE_API_KEY || process.env.YT_DATA_API_KEY || "").trim();
 export const enrichOnBoot = () =>
     (process.env.ENRICH_ON_BOOT ?? "true").toLowerCase() !== "false";
+// When set, replacing the SITE default dataset (and controlling the
+// enrichment job) requires this token; visitors' uploads are unaffected.
+export const getAdminToken = () => (process.env.ADMIN_TOKEN || "").trim();

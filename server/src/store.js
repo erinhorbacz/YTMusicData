@@ -5,35 +5,74 @@ import { ACTIVE_FILE, DEFAULT_DATASET } from "./config.js";
 import { buildCatalog } from "./catalog.js";
 import { parseWatchHistory } from "./parser.js";
 
-// In-memory dataset singleton. `version` bumps on every (re)load so the
-// frontend and enrichment job can detect swaps.
-const state = {
-    plays: [],
-    catalog: { songs: new Map(), artists: new Map(), videoToSong: new Map() },
-    dataset: null,
-    version: 0,
-};
+// Multi-tenant dataset store:
+//  - one DEFAULT dataset (the site owner's, loaded at boot) that everyone
+//    sees until they upload their own file, and
+//  - per-visitor SESSION datasets keyed by the browser-generated
+//    X-Dataset-Id header, held in memory with TTL + LRU eviction so a free
+//    512 MB host can't be filled up by uploads.
+// `version` is a global counter so any dataset swap invalidates the
+// frontend's fetch keys.
 
-export function getState() {
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // evict after 2h idle
+const MAX_SESSIONS = 5;
+
+let versionCounter = 0;
+
+function emptyCatalog() {
+    return { songs: new Map(), artists: new Map(), videoToSong: new Map() };
+}
+
+let defaultState = { plays: [], catalog: emptyCatalog(), dataset: null };
+const sessions = new Map(); // sid -> {state, lastAccess}
+
+function makeState(parsed, meta) {
+    versionCounter += 1;
+    const catalog = buildCatalog(parsed.plays);
+    const state = {
+        plays: parsed.plays,
+        catalog,
+        dataset: {
+            ...meta,
+            loadedAt: new Date().toISOString(),
+            totalEntries: parsed.totalEntries,
+            musicPlays: parsed.plays.length,
+            skippedNoUrl: parsed.skippedNoUrl,
+            unknownArtistPlays: parsed.unknownArtistPlays,
+            uniqueSongs: catalog.songs.size,
+            uniqueArtists: catalog.artists.size,
+            firstPlay: parsed.plays[0]?.time ?? null,
+            lastPlay: parsed.plays[parsed.plays.length - 1]?.time ?? null,
+            version: versionCounter,
+        },
+    };
+    console.log(
+        `[store] dataset loaded (${meta.source}): ${state.dataset.musicPlays} music plays, ` +
+            `${state.dataset.uniqueSongs} songs, ${state.dataset.uniqueArtists} artists (v${versionCounter})`,
+    );
     return state;
 }
 
-function readActivePointer() {
-    try {
-        return JSON.parse(fs.readFileSync(ACTIVE_FILE, "utf8"));
-    } catch {
-        return null;
+// ---------------------------------------------------------------------------
+// Lookup
+
+export function getState(sid) {
+    if (sid) {
+        const entry = sessions.get(sid);
+        if (entry) {
+            entry.lastAccess = Date.now();
+            return entry.state;
+        }
     }
+    return defaultState;
 }
 
-function writeActivePointer(pointer) {
-    if (pointer === null) {
-        fs.rmSync(ACTIVE_FILE, { force: true });
-        return;
-    }
-    fs.mkdirSync(path.dirname(ACTIVE_FILE), { recursive: true });
-    fs.writeFileSync(ACTIVE_FILE, JSON.stringify(pointer, null, 2));
+export function getDefaultState() {
+    return defaultState;
 }
+
+// ---------------------------------------------------------------------------
+// Parsing / validation
 
 // Parse + validate a Takeout file fully before touching current state, so a
 // bad upload never clobbers a working dataset.
@@ -66,66 +105,80 @@ export function parseDatasetFile(filePath) {
     return parsed;
 }
 
-function applyDataset(parsed, meta) {
-    state.plays = parsed.plays;
-    state.catalog = buildCatalog(parsed.plays);
-    state.version += 1;
-    state.dataset = {
-        ...meta,
-        loadedAt: new Date().toISOString(),
-        totalEntries: parsed.totalEntries,
-        musicPlays: parsed.plays.length,
-        skippedNoUrl: parsed.skippedNoUrl,
-        unknownArtistPlays: parsed.unknownArtistPlays,
-        uniqueSongs: state.catalog.songs.size,
-        uniqueArtists: state.catalog.artists.size,
-        firstPlay: parsed.plays[0]?.time ?? null,
-        lastPlay: parsed.plays[parsed.plays.length - 1]?.time ?? null,
-        version: state.version,
-    };
-    console.log(
-        `[store] dataset loaded: ${state.dataset.musicPlays} music plays, ` +
-            `${state.dataset.uniqueSongs} songs, ${state.dataset.uniqueArtists} artists (v${state.version})`,
-    );
-    return state.dataset;
+// ---------------------------------------------------------------------------
+// Default dataset (site owner's)
+
+function readActivePointer() {
+    try {
+        return JSON.parse(fs.readFileSync(ACTIVE_FILE, "utf8"));
+    } catch {
+        return null;
+    }
 }
 
-// Boot load: the active pointer (surviving restarts) or the default dataset.
+function writeActivePointer(pointer) {
+    if (pointer === null) {
+        fs.rmSync(ACTIVE_FILE, { force: true });
+        return;
+    }
+    fs.mkdirSync(path.dirname(ACTIVE_FILE), { recursive: true });
+    fs.writeFileSync(ACTIVE_FILE, JSON.stringify(pointer, null, 2));
+}
+
+// Boot load: an admin-uploaded pointer (if its file survived — disks are
+// ephemeral on free hosts) or the repo's committed default dataset.
 export function load() {
     const pointer = readActivePointer();
     if (pointer?.path && fs.existsSync(pointer.path)) {
         try {
             const parsed = parseDatasetFile(pointer.path);
-            return applyDataset(parsed, {
-                source: "upload",
+            defaultState = makeState(parsed, {
+                source: "default",
                 fileName: pointer.fileName ?? path.basename(pointer.path),
                 path: pointer.path,
                 uploadedAt: pointer.uploadedAt ?? null,
             });
+            return defaultState.dataset;
         } catch (err) {
             console.error(`[store] active upload failed to load (${err.message}); falling back to default`);
         }
     }
     if (!fs.existsSync(DEFAULT_DATASET)) {
         console.warn(`[store] no default dataset at ${DEFAULT_DATASET} — starting empty`);
-        return applyDataset(
-            { plays: [], totalEntries: 0, skippedNoUrl: 0, unknownArtistPlays: 0 },
-            { source: "none", fileName: null, path: null },
-        );
+        defaultState = {
+            plays: [],
+            catalog: emptyCatalog(),
+            dataset: {
+                source: "none",
+                fileName: null,
+                path: null,
+                loadedAt: new Date().toISOString(),
+                totalEntries: 0,
+                musicPlays: 0,
+                skippedNoUrl: 0,
+                unknownArtistPlays: 0,
+                uniqueSongs: 0,
+                uniqueArtists: 0,
+                firstPlay: null,
+                lastPlay: null,
+                version: ++versionCounter,
+            },
+        };
+        return defaultState.dataset;
     }
     console.time("[store] parse default dataset");
     const parsed = parseDatasetFile(DEFAULT_DATASET);
     console.timeEnd("[store] parse default dataset");
-    return applyDataset(parsed, {
+    defaultState = makeState(parsed, {
         source: "default",
         fileName: path.basename(DEFAULT_DATASET),
         path: DEFAULT_DATASET,
     });
+    return defaultState.dataset;
 }
 
-// Swap in an uploaded file (already saved to disk by multer). Throws the
-// parseDatasetFile validation errors; state is untouched on failure.
-export function activateUpload(filePath, originalName) {
+// Admin-token import: replaces the SITE default that every visitor sees.
+export function activateDefaultUpload(filePath, originalName) {
     const parsed = parseDatasetFile(filePath);
     const pointer = {
         path: filePath,
@@ -133,17 +186,18 @@ export function activateUpload(filePath, originalName) {
         uploadedAt: new Date().toISOString(),
     };
     writeActivePointer(pointer);
-    return applyDataset(parsed, {
-        source: "upload",
+    defaultState = makeState(parsed, {
+        source: "default",
         fileName: originalName,
         path: filePath,
         uploadedAt: pointer.uploadedAt,
     });
+    return defaultState.dataset;
 }
 
 export function resetToDefault() {
-    // Validate the default dataset BEFORE dropping the active-upload pointer,
-    // so a failed reset leaves the working upload in place.
+    // Validate the committed dataset BEFORE dropping the pointer, so a failed
+    // reset leaves the working upload in place.
     if (!fs.existsSync(DEFAULT_DATASET)) {
         const e = new Error("No default dataset available.");
         e.code = "NO_DEFAULT_DATASET";
@@ -151,9 +205,52 @@ export function resetToDefault() {
     }
     const parsed = parseDatasetFile(DEFAULT_DATASET);
     writeActivePointer(null);
-    return applyDataset(parsed, {
+    defaultState = makeState(parsed, {
         source: "default",
         fileName: path.basename(DEFAULT_DATASET),
         path: DEFAULT_DATASET,
     });
+    return defaultState.dataset;
+}
+
+// ---------------------------------------------------------------------------
+// Session datasets (visitors' uploads)
+
+function evictSessions() {
+    const now = Date.now();
+    for (const [sid, entry] of sessions) {
+        if (now - entry.lastAccess > SESSION_TTL_MS) sessions.delete(sid);
+    }
+    while (sessions.size >= MAX_SESSIONS) {
+        let oldest = null;
+        for (const [sid, entry] of sessions) {
+            if (!oldest || entry.lastAccess < oldest.lastAccess) oldest = { sid, lastAccess: entry.lastAccess };
+        }
+        sessions.delete(oldest.sid);
+    }
+}
+
+// A visitor's upload: lives in memory only, scoped to their X-Dataset-Id.
+export function activateSessionUpload(sid, filePath, originalName) {
+    const parsed = parseDatasetFile(filePath);
+    fs.rmSync(filePath, { force: true }); // in-memory only; no point keeping the file
+    evictSessions();
+    const state = makeState(parsed, {
+        source: "session",
+        fileName: originalName,
+        path: null,
+        uploadedAt: new Date().toISOString(),
+    });
+    sessions.set(sid, { state, lastAccess: Date.now() });
+    return state.dataset;
+}
+
+// Drop the visitor's session — they fall back to the site default.
+export function resetSession(sid) {
+    if (sid) sessions.delete(sid);
+    return defaultState.dataset;
+}
+
+export function sessionCount() {
+    return sessions.size;
 }

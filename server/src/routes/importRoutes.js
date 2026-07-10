@@ -7,6 +7,7 @@ import multer from "multer";
 import { UPLOADS_DIR } from "../config.js";
 import * as job from "../enrichment/job.js";
 import { ApiError, asyncHandler } from "../errors.js";
+import { isAdmin, sidOf } from "../session.js";
 import * as store from "../store.js";
 
 const router = Router();
@@ -41,6 +42,9 @@ function pruneUploads(keepPath) {
 
 const VALIDATION_CODES = new Set(["INVALID_JSON", "NOT_TAKEOUT_FORMAT", "NO_MUSIC_ENTRIES"]);
 
+// Uploads with a valid admin token replace the SITE default dataset that
+// every visitor sees; everything else becomes a private session dataset
+// scoped to the caller's X-Dataset-Id.
 router.post(
     "/import",
     upload.single("file"),
@@ -48,11 +52,29 @@ router.post(
         if (!req.file) {
             throw new ApiError(400, "NO_FILE", 'No file uploaded (expected multipart field "file").');
         }
+        const adminUpload = Boolean(req.get("X-Admin-Token")) && isAdmin(req);
+        if (req.get("X-Admin-Token") && !adminUpload) {
+            fs.rmSync(req.file.path, { force: true });
+            throw new ApiError(401, "BAD_ADMIN_TOKEN", "Invalid admin token.");
+        }
+        const sid = sidOf(req);
+        if (!adminUpload && !sid) {
+            fs.rmSync(req.file.path, { force: true });
+            throw new ApiError(400, "NO_SESSION", "Missing X-Dataset-Id header.");
+        }
         try {
-            const dataset = store.activateUpload(req.file.path, req.file.originalname);
-            pruneUploads(req.file.path);
-            job.onDatasetChanged();
-            res.json({ dataset, enrichment: job.getStatus() });
+            let dataset;
+            if (adminUpload) {
+                dataset = store.activateDefaultUpload(req.file.path, req.file.originalname);
+                pruneUploads(req.file.path);
+                job.onDatasetChanged();
+            } else {
+                // Session uploads reuse the shared enrichment cache but do
+                // not drive the scraper (a hostile file could otherwise make
+                // this host hammer YouTube with garbage lookups).
+                dataset = store.activateSessionUpload(sid, req.file.path, req.file.originalname);
+            }
+            res.json({ dataset, enrichment: job.getStatus(store.getState(adminUpload ? null : sid)) });
         } catch (err) {
             fs.rmSync(req.file.path, { force: true });
             if (VALIDATION_CODES.has(err.code)) {
@@ -63,11 +85,19 @@ router.post(
     }),
 );
 
+// A visitor's reset drops their session (back to the site default); an
+// admin-token reset restores the committed default dataset for everyone.
 router.post(
     "/import/reset",
     asyncHandler(async (req, res) => {
-        const dataset = store.resetToDefault();
-        job.onDatasetChanged();
+        let dataset;
+        if (req.get("X-Admin-Token")) {
+            if (!isAdmin(req)) throw new ApiError(401, "BAD_ADMIN_TOKEN", "Invalid admin token.");
+            dataset = store.resetToDefault();
+            job.onDatasetChanged();
+        } else {
+            dataset = store.resetSession(sidOf(req));
+        }
         res.json({ dataset, enrichment: job.getStatus() });
     }),
 );
