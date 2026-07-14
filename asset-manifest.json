@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/YTMusicData/static/js/main.5061d78f.js",
+    "index.html": "/YTMusicData/index.html",
+    "main.5061d78f.js.map": "/YTMusicData/static/js/main.5061d78f.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.5061d78f.js"
+  ]
+}
