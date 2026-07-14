@@ -53,9 +53,16 @@ the Import page — fills in real data:
 2. **Durations** — batch lookups via the YouTube Data API v3 (only if `YOUTUBE_API_KEY` is set; ~200 quota units for a full library, well within the free 10k/day)
 3. **Albums** — YT Music search via the unofficial `ytmusic-api` package (no key needed; also returns durations, so the app improves even without an API key)
 
-Everything is cached per-video in `server/data/cache/enrichment.json`, so each
+Everything is cached per-video in `server/data-seed/enrichment.json`, so each
 song is looked up once ever, and uploads reuse the same cache. The job is
 resumable — pause it, restart the server, it picks up where it left off.
+
+That cache file is deliberately **committed**: the local enrichment job
+writes straight to it, and pushing it ships the data to deployed containers
+(free hosts have ephemeral disks, so anything not in the repo is lost on
+restart). After enriching new listening history locally, just commit the
+changed file. Note it updates in place while the job runs — commit when the
+Import page shows enrichment is complete.
 
 ```bash
 cp server/.env.example server/.env   # then optionally add YOUTUBE_API_KEY
@@ -81,7 +88,7 @@ The deployed API is **multi-tenant**: visitors see the committed
 Takeout file — uploads are scoped to a per-browser session id (the
 `X-Dataset-Id` header), held in memory with TTL/LRU eviction, and never
 affect other visitors. The committed `server/data-seed/enrichment.json`
-snapshot seeds durations/albums on Render's ephemeral disk; session uploads
+cache provides durations/albums on Render's ephemeral disk; session uploads
 reuse that shared cache but never drive the scraper.
 
 Owner-only actions (replacing the site default dataset, running enrichment)

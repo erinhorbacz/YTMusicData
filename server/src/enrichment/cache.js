@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { CACHE_FILE, CACHE_SEED_FILE } from "../config.js";
+import { CACHE_FILE } from "../config.js";
 
 // Persistent per-videoId enrichment cache. Keyed by videoId, so it is
 // dataset-independent — uploads reuse everything already fetched.
@@ -13,28 +13,19 @@ let dirtyWrites = 0;
 const SAVE_EVERY = 25;
 
 export function load() {
-    // Runtime cache first; on a fresh instance (ephemeral disks on free
-    // hosts) fall back to the committed snapshot in server/data-seed/.
-    for (const [file, label] of [
-        [CACHE_FILE, "runtime cache"],
-        [CACHE_SEED_FILE, "committed seed snapshot"],
-    ]) {
-        try {
-            const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-            if (parsed && typeof parsed === "object") {
-                data.videos = parsed.videos ?? {};
-                data.failures = parsed.failures ?? {};
-            }
-            console.log(
-                `[cache] loaded ${Object.keys(data.videos).length} enriched videos from ${label} ` +
-                    `(${Object.keys(data.failures).length} failures)`,
-            );
-            return;
-        } catch {
-            // try the next source
+    try {
+        const parsed = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+        if (parsed && typeof parsed === "object") {
+            data.videos = parsed.videos ?? {};
+            data.failures = parsed.failures ?? {};
         }
+        console.log(
+            `[cache] loaded ${Object.keys(data.videos).length} enriched videos ` +
+                `(${Object.keys(data.failures).length} failures)`,
+        );
+    } catch {
+        console.log("[cache] no enrichment cache yet — starting empty");
     }
-    console.log("[cache] no enrichment cache yet — starting empty");
 }
 
 export function save({ force = false } = {}) {
