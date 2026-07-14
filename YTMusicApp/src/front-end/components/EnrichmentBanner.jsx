@@ -5,7 +5,6 @@ import { useDataset } from "../../context/DatasetContext";
 import { formatNumber } from "../../utils/format";
 
 const PHASE_LABELS = {
-    seeding: "Seeding cached durations",
     durations: "Fetching track durations",
     albums: "Looking up albums",
 };
@@ -16,7 +15,7 @@ function EnrichmentBanner() {
     if (!enrichmentActive || !enrichment) return null;
 
     const { state, processed, total } = enrichment;
-    const determinate = total > 0 && state !== "seeding";
+    const determinate = total > 0;
     const label = PHASE_LABELS[state] ?? "Enriching";
 
     return (

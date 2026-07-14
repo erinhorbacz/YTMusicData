@@ -4,7 +4,7 @@ import client from "../api/client";
 
 const DatasetContext = createContext(null);
 
-const ACTIVE_ENRICHMENT_STATES = new Set(["seeding", "durations", "albums"]);
+const ACTIVE_ENRICHMENT_STATES = new Set(["durations", "albums"]);
 
 export function DatasetProvider({ children }) {
     const [status, setStatus] = useState(null);

@@ -12,7 +12,6 @@ export const CACHE_FILE = path.join(SERVER_ROOT, "data-seed", "enrichment.json")
 export const ACTIVE_FILE = path.join(DATA_DIR, "active.json");
 
 export const DEFAULT_DATASET = path.join(REPO_ROOT, "watch-history.json");
-export const ARTIST_HISTORY_DIR = path.join(REPO_ROOT, "artist_history");
 export const CLIENT_BUILD_DIR = path.join(REPO_ROOT, "YTMusicApp", "build");
 
 // Fallback track length when no real duration is cached yet (3m45s).

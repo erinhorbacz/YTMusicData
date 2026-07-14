@@ -35,7 +35,6 @@ function adminHeaders() {
 
 const ENRICHMENT_LABELS = {
     idle: "Not started",
-    seeding: "Seeding cached data…",
     durations: "Fetching track durations…",
     albums: "Looking up albums…",
     paused: "Paused",
@@ -263,7 +262,7 @@ function EnrichmentCard() {
     };
 
     if (!enrichment) return null;
-    const active = ["seeding", "durations", "albums"].includes(enrichment.state);
+    const active = ["durations", "albums"].includes(enrichment.state);
     const pct =
         enrichment.total > 0 ? Math.round((enrichment.processed / enrichment.total) * 100) : null;
 

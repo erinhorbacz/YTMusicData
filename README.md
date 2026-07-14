@@ -49,9 +49,8 @@ Watch history has no track lengths or album names, so minutes listened start
 as estimates (3m45s per play). A background job — visible and controllable on
 the Import page — fills in real data:
 
-1. **Seed** — imports the durations/albums already collected in `artist_history/` by the original notebooks
-2. **Durations** — batch lookups via the YouTube Data API v3 (only if `YOUTUBE_API_KEY` is set; ~200 quota units for a full library, well within the free 10k/day)
-3. **Albums** — YT Music search via the unofficial `ytmusic-api` package (no key needed; also returns durations, so the app improves even without an API key)
+1. **Durations** — batch lookups via the YouTube Data API v3 (only if `YOUTUBE_API_KEY` is set; ~200 quota units for a full library, well within the free 10k/day)
+2. **Albums** — YT Music search via the unofficial `ytmusic-api` package (no key needed; also returns durations, so the app improves even without an API key)
 
 Everything is cached per-video in `server/data-seed/enrichment.json`, so each
 song is looked up once ever, and uploads reuse the same cache. The job is

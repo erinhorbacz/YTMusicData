@@ -1,7 +1,6 @@
 import { getYoutubeApiKey } from "../config.js";
 import * as store from "../store.js";
 import * as cache from "./cache.js";
-import { seedFromArtistHistory } from "./seed.js";
 import { fetchDurationsBatch } from "./youtube.js";
 import { lookupAlbum } from "./ytmusic.js";
 
@@ -18,7 +17,7 @@ const CIRCUIT_BREAKER = 20;
 const sessionSkips = new Set();
 
 const status = {
-    state: "idle", // idle | seeding | durations | albums | paused | done | error
+    state: "idle", // idle | durations | albums | paused | done | error
     processed: 0,
     total: 0,
     startedAt: null,
@@ -176,13 +175,6 @@ async function runAlbumsPhase() {
 async function runLoop() {
     do {
         datasetChanged = false;
-
-        if (cache.size() === 0) {
-            status.state = "seeding";
-            const seeded = seedFromArtistHistory();
-            console.log(`[enrich] seeded ${seeded} videos from artist_history/`);
-        }
-
         await runDurationsPhase();
         if (!pauseRequested && !datasetChanged) await runAlbumsPhase();
     } while (datasetChanged && !pauseRequested);
