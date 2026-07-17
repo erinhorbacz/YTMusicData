@@ -74,11 +74,15 @@ const Navbar = () => {
                                 color: "#fff",
                                 textTransform: "none",
                                 fontWeight: isActive(pathname, to) ? 700 : 400,
-                                borderRadius: 2,
+                                borderRadius: 999,
                                 px: 1.5,
-                                borderBottom: "2px solid",
-                                borderColor: isActive(pathname, to) ? "#fff" : "transparent",
-                                "&:hover": { bgcolor: "rgba(255,255,255,0.12)" },
+                                py: 0.5,
+                                bgcolor: isActive(pathname, to) ? "rgba(255,255,255,0.18)" : "transparent",
+                                "&:hover": {
+                                    bgcolor: isActive(pathname, to)
+                                        ? "rgba(255,255,255,0.24)"
+                                        : "rgba(255,255,255,0.08)",
+                                },
                             }}
                         >
                             {label}
